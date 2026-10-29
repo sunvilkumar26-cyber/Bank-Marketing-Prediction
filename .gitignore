@@ -3,3 +3,5 @@ pycache/
 *.pyc
 .ipynb_checkpoints/
 .env
+bank-additional-full.csv
+*.csv
