@@ -3,120 +3,274 @@ import pandas as pd
 import joblib
 from pathlib import Path
 
-# Page configuration
+# --------------------------------------------------
+# 1. Page Configuration
+# --------------------------------------------------
+
 st.set_page_config(
     page_title="Bank Marketing Prediction",
     page_icon="🏦",
     layout="centered"
 )
 
-# Load the trained model and feature columns
+# --------------------------------------------------
+# 2. Load Saved Model and Feature Columns
+# --------------------------------------------------
+
 BASE_DIR = Path(__file__).resolve().parent
 
-model = joblib.load(BASE_DIR / "bank_marketing_random_forest.pkl")
-model_columns = joblib.load(BASE_DIR / "model_columns.pkl")
+model = joblib.load(
+    BASE_DIR / "bank_marketing_random_forest.pkl"
+)
 
-# Application title
+model_columns = joblib.load(
+    BASE_DIR / "model_columns.pkl"
+)
+
+# --------------------------------------------------
+# 3. Application Title
+# --------------------------------------------------
+
 st.title("🏦 Bank Marketing Prediction")
+
 st.write(
     "Predict whether a customer is likely to subscribe "
     "to a bank term deposit."
 )
 
 st.info(
-    "Enter customer details below. The model will predict "
-    "the result using your trained Random Forest model."
+    "Enter the customer details below and click "
+    "'Predict Subscription' to get a prediction."
 )
 
-# Load the original dataset to provide valid dropdown options
-data_path = BASE_DIR / "bank-additional-full.csv"
-bank_df = pd.read_csv(data_path, sep=";")
+# --------------------------------------------------
+# 4. Define Input Options
+# --------------------------------------------------
 
-# Match the features used when training the model
-excluded_columns = {
-    "customer subscribed",
-    "y",
-    "duration",
-    "age_group"
+categorical_options = {
+    "job": [
+        "admin.", "blue-collar", "entrepreneur", "housemaid",
+        "management", "retired", "self-employed", "services",
+        "student", "technician", "unemployed", "unknown"
+    ],
+
+    "marital": [
+        "divorced", "married", "single", "unknown"
+    ],
+
+    "education": [
+        "basic.4y", "basic.6y", "basic.9y",
+        "high.school", "illiterate",
+        "professional.course", "university.degree", "unknown"
+    ],
+
+    "default": [
+        "no", "unknown", "yes"
+    ],
+
+    "housing": [
+        "no", "unknown", "yes"
+    ],
+
+    "loan": [
+        "no", "unknown", "yes"
+    ],
+
+    "contact": [
+        "cellular", "telephone"
+    ],
+
+    "month": [
+        "mar", "apr", "may", "jun", "jul", "aug",
+        "sep", "oct", "nov", "dec"
+    ],
+
+    "day_of_week": [
+        "mon", "tue", "wed", "thu", "fri"
+    ],
+
+    "poutcome": [
+        "failure", "nonexistent", "success"
+    ]
 }
 
-feature_columns = [
-    col for col in bank_df.columns
-    if col not in excluded_columns
-]
+# Numeric input defaults
+numeric_defaults = {
+    "age": 38,
+    "campaign": 2,
+    "pdays": 999,
+    "previous": 0,
+    "emp.var.rate": 1.1,
+    "cons.price.idx": 93.994,
+    "cons.conf.idx": -41.8,
+    "euribor3m": 4.857,
+    "nr.employed": 5191.0
+}
 
-# Create the input form
+# --------------------------------------------------
+# 5. Customer Input Form
+# --------------------------------------------------
+
 with st.form("customer_form"):
 
     st.subheader("Customer Details")
 
     customer_data = {}
 
-    for column in feature_columns:
+    st.markdown("### Personal Information")
 
-        if column not in bank_df.columns:
-            continue
+    customer_data["age"] = st.number_input(
+        "Age",
+        min_value=18,
+        max_value=100,
+        value=38
+    )
 
-        if pd.api.types.is_numeric_dtype(bank_df[column]):
+    for column in ["job", "marital", "education"]:
+        customer_data[column] = st.selectbox(
+            column.replace("_", " ").title(),
+            categorical_options[column]
+        )
 
-            customer_data[column] = st.number_input(
-                column.replace("_", " ").title(),
-                value=float(bank_df[column].median())
-            )
+    st.markdown("### Existing Financial Products")
 
-        else:
+    for column in ["default", "housing", "loan"]:
+        customer_data[column] = st.selectbox(
+            column.replace("_", " ").title(),
+            categorical_options[column]
+        )
 
-            options = sorted(
-                bank_df[column].dropna().astype(str).unique().tolist()
-            )
+    st.markdown("### Campaign Information")
 
-            customer_data[column] = st.selectbox(
-                column.replace("_", " ").title(),
-                options=options
-            )
+    customer_data["contact"] = st.selectbox(
+        "Contact Type",
+        categorical_options["contact"]
+    )
 
-    submitted = st.form_submit_button("Predict Subscription")
+    customer_data["month"] = st.selectbox(
+        "Last Contact Month",
+        categorical_options["month"]
+    )
 
-# Make prediction
+    customer_data["day_of_week"] = st.selectbox(
+        "Last Contact Day",
+        categorical_options["day_of_week"]
+    )
+
+    customer_data["campaign"] = st.number_input(
+        "Contacts During Current Campaign",
+        min_value=1,
+        max_value=100,
+        value=2
+    )
+
+    customer_data["pdays"] = st.number_input(
+        "Days Since Previous Campaign Contact (999 = Not Previously Contacted)",
+        min_value=0,
+        max_value=999,
+        value=999
+    )
+
+    customer_data["previous"] = st.number_input(
+        "Contacts Before Current Campaign",
+        min_value=0,
+        max_value=100,
+        value=0
+    )
+
+    customer_data["poutcome"] = st.selectbox(
+        "Previous Campaign Outcome",
+        categorical_options["poutcome"]
+    )
+
+    st.markdown("### Economic Indicators")
+
+    for column in [
+        "emp.var.rate",
+        "cons.price.idx",
+        "cons.conf.idx",
+        "euribor3m",
+        "nr.employed"
+    ]:
+        customer_data[column] = st.number_input(
+            column.replace(".", " ").title(),
+            value=float(numeric_defaults[column]),
+            format="%.3f"
+        )
+
+    submitted = st.form_submit_button(
+        "Predict Subscription"
+    )
+
+# --------------------------------------------------
+# 6. Make Prediction
+# --------------------------------------------------
+
 if submitted:
 
     input_df = pd.DataFrame([customer_data])
 
-    # Convert categorical values into numeric columns
-    input_encoded = pd.get_dummies(input_df, dtype=int)
+    # Encode categorical features
+    input_encoded = pd.get_dummies(
+        input_df,
+        dtype=int
+    )
 
-    # Match the columns and order used during model training
+    # Match the exact feature columns used during training
     input_encoded = input_encoded.reindex(
         columns=model_columns,
         fill_value=0
     )
 
-    # Predict using the trained model
+    # Predict customer subscription
     prediction = model.predict(input_encoded)[0]
 
-    # Display the result
+    # Handle either numeric or text target labels
+    is_yes = str(prediction).strip().lower() in {
+        "1", "yes", "true"
+    }
+
     st.subheader("Prediction Result")
 
-    if prediction == 1:
-        st.success("The model predicts: Customer is likely to subscribe (YES).")
+    if is_yes:
+        st.success(
+            "The model predicts: Customer is likely to subscribe (YES)."
+        )
     else:
-        st.warning("The model predicts: Customer is unlikely to subscribe (NO).")
+        st.warning(
+            "The model predicts: Customer is unlikely to subscribe (NO)."
+        )
 
-    # Display probabilities when supported by the model
+    # Display subscription probability when available
     if hasattr(model, "predict_proba"):
 
         probabilities = model.predict_proba(input_encoded)[0]
 
-        yes_probability = probabilities[
-            list(model.classes_).index(1)
+        classes = [
+            str(label).strip().lower()
+            for label in model.classes_
         ]
 
-        st.write(
-            f"Estimated subscription probability: "
-            f"**{yes_probability:.2%}**"
+        yes_labels = {"1", "yes", "true"}
+
+        yes_index = next(
+            (
+                index
+                for index, label in enumerate(classes)
+                if label in yes_labels
+            ),
+            None
         )
 
+        if yes_index is not None:
+            yes_probability = probabilities[yes_index]
+
+            st.metric(
+                "Estimated Subscription Probability",
+                f"{yes_probability:.2%}"
+            )
+
 st.caption(
-    "This is a machine learning prediction, not a guarantee "
-    "of customer behavior."
+    "This prediction is based on a trained machine learning model. "
+    "It is an estimate, not a guarantee of customer behavior."
 )
